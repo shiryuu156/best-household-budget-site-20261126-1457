@@ -43,6 +43,9 @@ browser's local storage; the footer has a "Reset example data" button.
 - `serve.ts` — tiny local static server: `node serve.ts`, then open
   http://localhost:8080.
 - `screenshots/` — 4 real renders of the site (3 desktop, 1 phone).
+  Re-rendered post-opening with `node shots.mjs` (own script: serves `app/`
+  via `serve.ts`, captures each route in `shots.json` with Playwright
+  Chromium); two runs produce byte-identical files.
 - `shots.json` — which view and viewport each screenshot was taken at.
 
 ## Run it
