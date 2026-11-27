@@ -1,178 +1,201 @@
-// Household Ledger — example data and state.
-// The figures below are a realistic EXAMPLE household ("The Alvarez Family"),
-// pre-filled so every page shows real numbers on first load. The household can
-// edit, add or delete anything; changes are saved in the browser's localStorage
-// and a "Reset example data" button in Settings restores this starting point.
+// Nest Egg — household budget data.
+// One clear job: hold the household's figures, persist edits in localStorage,
+// and expose small read helpers. No network, no imports from outside app/.
 
-export const EXAMPLE_MONTH = '2026-11';
-export const STORAGE_KEY = 'household-ledger-v1';
-
-export const CATEGORY_COLORS = {
-  'Housing': '#2563eb',
-  'Groceries': '#16a34a',
-  'Transport': '#d97706',
-  'Utilities': '#0891b2',
-  'Dining Out': '#db2777',
-  'Entertainment': '#7c3aed',
-  'Health & Fitness': '#dc2626',
-  'Kids & School': '#4f46e5',
-  'Subscriptions': '#64748b',
-  'Household & Misc': '#a16207',
-  'Savings': '#059669',
+export const HOUSEHOLD = {
+  name: 'The Alvarez Household',
+  members: ['Rosa', 'Marco', 'Lia', 'Tom'],
+  month: 'November 2026',
+  currency: 'USD',
 };
 
-export function exampleState() {
+export const DEFAULT_BUDGETS = [
+  { id: 'housing', label: 'Housing & Rent', budget: 1450, color: '#2f6f5e', icon: '⌂' },
+  { id: 'groceries', label: 'Groceries', budget: 640, color: '#d98e2b', icon: '◍' },
+  { id: 'transport', label: 'Transport', budget: 320, color: '#4a7fb5', icon: '➤' },
+  { id: 'utilities', label: 'Utilities', budget: 260, color: '#7a5fb0', icon: '⚡' },
+  { id: 'dining', label: 'Eating Out', budget: 240, color: '#c65b7c', icon: '🍽' },
+  { id: 'kids', label: 'Kids & School', budget: 380, color: '#3aa88f', icon: '✎' },
+  { id: 'health', label: 'Health', budget: 180, color: '#b5543f', icon: '+' },
+  { id: 'fun', label: 'Fun & Streaming', budget: 150, color: '#8a9a3b', icon: '♪' },
+];
+
+export const DEFAULT_INCOME = [
+  { id: 'salary-rosa', label: "Rosa's salary", amount: 3400, day: 1 },
+  { id: 'salary-marco', label: "Marco's salary", amount: 2150, day: 15 },
+  { id: 'side', label: 'Weekend market stall', amount: 300, day: 22 },
+];
+
+export const DEFAULT_BILLS = [
+  { id: 'rent', label: 'Rent — Maple Court 4B', amount: 1450, due: 1, paid: true, category: 'housing', recurring: 'Monthly' },
+  { id: 'electric', label: 'City Power & Light', amount: 118, due: 5, paid: true, category: 'utilities', recurring: 'Monthly' },
+  { id: 'internet', label: 'Northlink Internet 500', amount: 64, due: 8, paid: true, category: 'utilities', recurring: 'Monthly' },
+  { id: 'water', label: 'Water & Sewer', amount: 52, due: 10, paid: true, category: 'utilities', recurring: 'Monthly' },
+  { id: 'phone', label: 'Family mobile plan', amount: 96, due: 12, paid: true, category: 'utilities', recurring: 'Monthly' },
+  { id: 'insurance', label: 'Home & car insurance', amount: 214, due: 15, paid: false, category: 'health', recurring: 'Monthly' },
+  { id: 'school', label: 'Lia school fees', amount: 180, due: 18, paid: false, category: 'kids', recurring: 'Monthly' },
+  { id: 'gym', label: 'Riverside Gym family', amount: 58, due: 20, paid: false, category: 'health', recurring: 'Monthly' },
+  { id: 'streaming', label: 'StreamBox + Music', amount: 27, due: 24, paid: false, category: 'fun', recurring: 'Monthly' },
+  { id: 'car', label: 'Car loan — Blue Wagon', amount: 296, due: 27, paid: false, category: 'transport', recurring: 'Monthly' },
+];
+
+export const DEFAULT_TRANSACTIONS = [
+  { id: 't01', date: '2026-11-26', label: 'GreenMart weekly shop', category: 'groceries', amount: 96.40 },
+  { id: 't02', date: '2026-11-25', label: 'Bus passes — Lia & Tom', category: 'transport', amount: 42.00 },
+  { id: 't03', date: '2026-11-24', label: 'Pizza night (takeaway)', category: 'dining', amount: 31.50 },
+  { id: 't04', date: '2026-11-23', label: 'Pharmacy — Tom cold remedy', category: 'health', amount: 18.75 },
+  { id: 't05', date: '2026-11-22', label: 'GreenMart weekly shop', category: 'groceries', amount: 112.30 },
+  { id: 't06', date: '2026-11-21', label: 'Fuel — Blue Wagon', category: 'transport', amount: 48.00 },
+  { id: 't07', date: '2026-11-20', label: 'Cinema — family Saturday', category: 'fun', amount: 44.00 },
+  { id: 't08', date: '2026-11-19', label: 'School art supplies', category: 'kids', amount: 26.90 },
+  { id: 't09', date: '2026-11-18', label: 'GreenMart weekly shop', category: 'groceries', amount: 88.15 },
+  { id: 't10', date: '2026-11-17', label: 'Lunch out — Rosa & Marco', category: 'dining', amount: 27.80 },
+  { id: 't11', date: '2026-11-15', label: "Marco's salary in", category: 'income', amount: -2150.00 },
+  { id: 't12', date: '2026-11-14', label: 'Hardware store — tap washer', category: 'housing', amount: 14.60 },
+  { id: 't13', date: '2026-11-12', label: 'GreenMart weekly shop', category: 'groceries', amount: 104.55 },
+  { id: 't14', date: '2026-11-08', label: 'Birthday gift — Aunt Bea', category: 'fun', amount: 35.00 },
+  { id: 't15', date: '2026-11-05', label: 'Dentist check — Lia', category: 'health', amount: 65.00 },
+  { id: 't16', date: '2026-11-01', label: "Rosa's salary in", category: 'income', amount: -3400.00 },
+];
+
+export const DEFAULT_GOALS = [
+  { id: 'g1', label: 'Emergency fund', target: 6000, saved: 4210, note: '$150 a month, auto-move on payday' },
+  { id: 'g2', label: 'Summer road trip', target: 1800, saved: 965, note: 'July 2027 — coast drive with the kids' },
+  { id: 'g3', label: 'New washing machine', target: 750, saved: 520, note: 'Current one is 11 years old' },
+  { id: 'g4', label: "Tom's bike fund", target: 320, saved: 210, note: 'Tom chips in $10 a week' },
+];
+
+export const MONTH_HISTORY = [
+  { month: 'Jun', spent: 3280 },
+  { month: 'Jul', spent: 3415 },
+  { month: 'Aug', spent: 3190 },
+  { month: 'Sep', spent: 3560 },
+  { month: 'Oct', spent: 3395 },
+  { month: 'Nov', spent: 2535 },
+];
+
+const KEY = 'nest-egg-v1';
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+export function defaultState() {
   return {
-    householdName: 'The Alvarez Family',
-    month: EXAMPLE_MONTH,
-    note: 'Example household — edit any figure to make it yours.',
-    income: [
-      { id: 'inc-1', source: 'Maya Alvarez — salary (teacher)', amount: 4200 },
-      { id: 'inc-2', source: 'Jordan Alvarez — salary (electrician)', amount: 2650 },
-    ],
-    budget: [
-      { id: 'bud-1', category: 'Housing', planned: 1850 },
-      { id: 'bud-2', category: 'Groceries', planned: 720 },
-      { id: 'bud-3', category: 'Transport', planned: 410 },
-      { id: 'bud-4', category: 'Utilities', planned: 260 },
-      { id: 'bud-5', category: 'Dining Out', planned: 320 },
-      { id: 'bud-6', category: 'Entertainment', planned: 180 },
-      { id: 'bud-7', category: 'Health & Fitness', planned: 240 },
-      { id: 'bud-8', category: 'Kids & School', planned: 380 },
-      { id: 'bud-9', category: 'Subscriptions', planned: 65 },
-      { id: 'bud-10', category: 'Household & Misc', planned: 150 },
-      { id: 'bud-11', category: 'Savings', planned: 1200 },
-    ],
-    expenses: [
-      { id: 'exp-1', date: '2026-11-01', description: 'Monthly rent', category: 'Housing', amount: 1850 },
-      { id: 'exp-2', date: '2026-11-02', description: 'Weekly shop — FreshMart', category: 'Groceries', amount: 148.2 },
-      { id: 'exp-3', date: '2026-11-03', description: 'Bus pass (Maya)', category: 'Transport', amount: 72 },
-      { id: 'exp-4', date: '2026-11-04', description: 'Streaming bundle', category: 'Subscriptions', amount: 24.99 },
-      { id: 'exp-5', date: '2026-11-05', description: 'Pizza night', category: 'Dining Out', amount: 38.5 },
-      { id: 'exp-6', date: '2026-11-06', description: 'Pharmacy — vitamins', category: 'Health & Fitness', amount: 27.4 },
-      { id: 'exp-7', date: '2026-11-07', description: 'Petrol — Shell', category: 'Transport', amount: 54.3 },
-      { id: 'exp-8', date: '2026-11-08', description: 'Weekly shop — FreshMart', category: 'Groceries', amount: 162.75 },
-      { id: 'exp-9', date: '2026-11-09', description: 'School lunch money (2 kids)', category: 'Kids & School', amount: 60 },
-      { id: 'exp-10', date: '2026-11-10', description: 'Electric bill', category: 'Utilities', amount: 118.6 },
-      { id: 'exp-11', date: '2026-11-11', description: 'Cinema — family film', category: 'Entertainment', amount: 42 },
-      { id: 'exp-12', date: '2026-11-12', description: 'Internet bill', category: 'Utilities', amount: 79 },
-      { id: 'exp-13', date: '2026-11-13', description: 'Takeaway Thai', category: 'Dining Out', amount: 46.8 },
-      { id: 'exp-14', date: '2026-11-14', description: 'Weekly shop — FreshMart', category: 'Groceries', amount: 139.9 },
-      { id: 'exp-15', date: '2026-11-15', description: 'Gym membership (Maya)', category: 'Health & Fitness', amount: 38 },
-      { id: 'exp-16', date: '2026-11-16', description: 'Kids — football boots', category: 'Kids & School', amount: 84.99 },
-      { id: 'exp-17', date: '2026-11-17', description: 'Mobile plan (2 lines)', category: 'Utilities', amount: 112 },
-      { id: 'exp-19', date: '2026-11-18', description: 'Water bill', category: 'Utilities', amount: 46.2 },
-      { id: 'exp-20', date: '2026-11-19', description: 'Dentist check-up (Leo)', category: 'Health & Fitness', amount: 85 },
-      { id: 'exp-21', date: '2026-11-20', description: 'Credit card minimum', category: 'Household & Misc', amount: 120 },
-      { id: 'exp-22', date: '2026-11-21', description: 'Weekly shop — FreshMart', category: 'Groceries', amount: 171.4 },
-      { id: 'exp-23', date: '2026-11-22', description: 'Birthday gift — Grandma', category: 'Household & Misc', amount: 35 },
-      { id: 'exp-24', date: '2026-11-23', description: 'Lunch out with friends', category: 'Dining Out', amount: 28.75 },
-      { id: 'exp-25', date: '2026-11-24', description: 'Petrol — Shell', category: 'Transport', amount: 48.9 },
-      { id: 'exp-26', date: '2026-11-25', description: 'School trip — science museum', category: 'Kids & School', amount: 96 },
-      { id: 'exp-27', date: '2026-11-25', description: 'Board game night snacks', category: 'Entertainment', amount: 22.6 },
-      { id: 'exp-28', date: '2026-11-26', description: 'Weekly shop — FreshMart', category: 'Groceries', amount: 118.55 },
-    ],
-    bills: [
-      { id: 'bill-1', name: 'Rent', amount: 1850, dueDay: 1, category: 'Housing', paid: true, autopay: true },
-      { id: 'bill-2', name: 'Streaming bundle', amount: 24.99, dueDay: 5, category: 'Subscriptions', paid: true, autopay: true },
-      { id: 'bill-3', name: 'Electric bill', amount: 118.6, dueDay: 12, category: 'Utilities', paid: true, autopay: false },
-      { id: 'bill-4', name: 'Internet', amount: 79, dueDay: 15, category: 'Utilities', paid: true, autopay: true },
-      { id: 'bill-5', name: 'Water bill', amount: 46.2, dueDay: 18, category: 'Utilities', paid: true, autopay: false },
-      { id: 'bill-6', name: 'Credit card', amount: 420, dueDay: 20, category: 'Household & Misc', paid: true, autopay: false },
-      { id: 'bill-7', name: 'Mobile plan (2 lines)', amount: 112, dueDay: 22, category: 'Utilities', paid: true, autopay: true },
-      { id: 'bill-8', name: 'Car insurance', amount: 164, dueDay: 27, category: 'Transport', paid: false, autopay: false },
-      { id: 'bill-9', name: 'Gym membership', amount: 38, dueDay: 28, category: 'Health & Fitness', paid: false, autopay: true },
-      { id: 'bill-10', name: 'Home insurance', amount: 96, dueDay: 30, category: 'Housing', paid: false, autopay: false },
-    ],
-    goals: [
-      { id: 'goal-1', name: 'Emergency fund', target: 10000, saved: 6250, targetDate: '2027-06-30', note: '6 months of essential spending' },
-      { id: 'goal-2', name: 'Family vacation — coast trip', target: 2400, saved: 1080, targetDate: '2027-07-15', note: 'Flights + a week by the sea' },
-      { id: 'goal-3', name: 'New car down payment', target: 8000, saved: 1450, targetDate: '2028-01-31', note: 'Replace the 2012 hatchback' },
-      { id: 'goal-4', name: 'Kids’ college fund', target: 15000, saved: 3200, targetDate: '2030-09-01', note: 'Small monthly top-ups add up' },
-    ],
-    history: [
-      { month: '2026-07', income: 6850, spent: 5620 },
-      { month: '2026-08', income: 6850, spent: 5890 },
-      { month: '2026-09', income: 7010, spent: 5745 },
-      { month: '2026-10', income: 6850, spent: 6015 },
-      { month: '2026-11', income: 6850, spent: 0 }, // November "spent" is computed live below
-    ],
+    budgets: clone(DEFAULT_BUDGETS),
+    income: clone(DEFAULT_INCOME),
+    bills: clone(DEFAULT_BILLS),
+    transactions: clone(DEFAULT_TRANSACTIONS),
+    goals: clone(DEFAULT_GOALS),
   };
 }
 
-// ---- persistence -----------------------------------------------------------
-
 export function loadState() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.expenses) && Array.isArray(parsed.budget)) return parsed;
-    }
-  } catch { /* fall through to the example data */ }
-  const fresh = exampleState();
-  saveState(fresh);
-  return fresh;
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return defaultState();
+    const parsed = JSON.parse(raw);
+    const base = defaultState();
+    return {
+      budgets: Array.isArray(parsed.budgets) ? parsed.budgets : base.budgets,
+      income: Array.isArray(parsed.income) ? parsed.income : base.income,
+      bills: Array.isArray(parsed.bills) ? parsed.bills : base.bills,
+      transactions: Array.isArray(parsed.transactions) ? parsed.transactions : base.transactions,
+      goals: Array.isArray(parsed.goals) ? parsed.goals : base.goals,
+    };
+  } catch (err) {
+    return defaultState();
+  }
 }
 
 export function saveState(state) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* storage unavailable: keep in-memory */ }
+  try {
+    localStorage.setItem(KEY, JSON.stringify(state));
+  } catch (err) {
+    // Private mode or hosting without storage: keep working in memory.
+  }
 }
 
 export function resetState() {
-  const fresh = exampleState();
-  saveState(fresh);
-  return fresh;
+  try {
+    localStorage.removeItem(KEY);
+  } catch (err) {
+    // Ignore: in-memory state is reset by the caller.
+  }
+  return defaultState();
 }
 
-// ---- derived figures -------------------------------------------------------
+// ---- Read helpers: every figure the views show comes through here. ----
 
 export function totalIncome(state) {
-  return state.income.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-}
-
-export function totalPlanned(state) {
-  return state.budget.reduce((sum, item) => sum + Number(item.planned || 0), 0);
+  return state.income.reduce((sum, row) => sum + row.amount, 0);
 }
 
 export function spentByCategory(state) {
   const spent = {};
-  for (const expense of state.expenses) {
-    spent[expense.category] = (spent[expense.category] || 0) + Number(expense.amount || 0);
+  for (const tx of state.transactions) {
+    if (tx.amount > 0 && tx.category !== 'income') {
+      spent[tx.category] = (spent[tx.category] || 0) + tx.amount;
+    }
+  }
+  // Paid bills count as spending too — rent is the housing pot's biggest item.
+  for (const bill of state.bills) {
+    if (bill.paid) {
+      spent[bill.category] = (spent[bill.category] || 0) + bill.amount;
+    }
   }
   return spent;
 }
 
 export function totalSpent(state) {
-  return state.expenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  return Object.values(spentByCategory(state)).reduce((a, b) => a + b, 0);
 }
 
-export function categoryColor(category) {
-  return CATEGORY_COLORS[category] || '#64748b';
+export function totalBudget(state) {
+  return state.budgets.reduce((sum, row) => sum + row.budget, 0);
 }
 
-export function monthLabel(isoMonth) {
-  const [year, month] = isoMonth.split('-').map(Number);
-  return new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+export function billsDue(state) {
+  return state.bills.filter((bill) => !bill.paid);
 }
 
-export function shortMonthLabel(isoMonth) {
-  const [year, month] = isoMonth.split('-').map(Number);
-  return new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'short' });
+export function billsDueTotal(state) {
+  return billsDue(state).reduce((sum, bill) => sum + bill.amount, 0);
+}
+
+export function upcomingBills(state, fromDay) {
+  return state.bills
+    .filter((bill) => !bill.paid && bill.due >= fromDay)
+    .sort((a, b) => a.due - b.due)
+    .slice(0, 5);
+}
+
+export function recentTransactions(state, count) {
+  return [...state.transactions]
+    .sort((a, b) => (a.date < b.date ? 1 : -1))
+    .slice(0, count);
+}
+
+export function categoryLabel(state, id) {
+  const found = state.budgets.find((row) => row.id === id);
+  return found ? found.label : id;
+}
+
+export function categoryColor(state, id) {
+  const found = state.budgets.find((row) => row.id === id);
+  return found ? found.color : '#888888';
 }
 
 export function money(amount) {
-  return Number(amount || 0).toLocaleString('en-US', {
-    style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2,
-  });
+  const sign = amount < 0 ? '−' : '';
+  return sign + '$' + Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export function money0(amount) {
-  return Number(amount || 0).toLocaleString('en-US', {
-    style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0,
-  });
+  return '$' + Math.round(amount).toLocaleString('en-US');
 }
 
-export function newId(prefix) {
-  return prefix + '-' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+export function pct(part, whole) {
+  if (!whole) return 0;
+  return Math.round((part / whole) * 100);
 }

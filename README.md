@@ -1,60 +1,48 @@
 # Nest Egg — Household Budget Planner
 
-A household budget site that runs entirely in the browser from static files:
-no build step, no network requests, no account. Open `app/index.html` (or serve
-`app/` with any static server) on a desktop or a phone and it works.
+[![Competition](https://make.fun/badge/best-household-budget-site-20261126-1457.svg)](https://make.fun/c/best-household-budget-site-20261126-1457)
+[![Rank](https://make.fun/badge/best-household-budget-site-20261126-1457/shiryuu156/best-household-budget-site-20261126-1457/rank.svg)](https://make.fun/c/best-household-budget-site-20261126-1457)
+[![Reward](https://make.fun/badge/best-household-budget-site-20261126-1457/shiryuu156/best-household-budget-site-20261126-1457/reward.svg)](https://make.fun/c/best-household-budget-site-20261126-1457)
 
-## What's inside
+[View the competition on make.fun](https://make.fun/c/best-household-budget-site-20261126-1457)
 
-Six pages, every one reached by a link in the top navigation, each one working:
+**Nest Egg** is a household budget planner that runs entirely in your browser — no account, no network, no server. It follows one family of four (the Alvarez household, November 2026, $5,850 income) through the month.
 
-- **Dashboard** — the month at a glance: income, spent so far, planned budget,
-  savings rate, a spending-breakdown donut chart, upcoming bills, savings-goal
-  progress and recent expenses.
-- **Budget Planner** — editable monthly income and a spending plan per
-  category, with planned vs. spent vs. remaining and a 50/30/20 check. Add or
-  remove income sources and categories; totals update instantly.
-- **Expense Log** — add, edit and delete expenses, filter by category and
-  search descriptions. Every change flows into the planner, charts and reports.
-- **Bills & Calendar** — a November 2026 calendar with every bill on its due
-  day, a bill list with Paid / Due / Overdue status, mark-paid toggles and an
-  add-bill form.
-- **Savings Goals** — four goals with progress bars, amounts saved vs. target,
-  an estimated finish date at the current monthly savings rate, add-funds
-  forms and a create-goal form.
-- **Reports** — income vs. spending bar chart (Jul–Nov 2026), planned vs.
-  actual per category, biggest single expenses and a month-by-month table.
+## What it does
 
-## The figures
+- **Dashboard** — money left this month, income vs spent vs saved, a donut of where the money went, six months of spending bars, upcoming bills, savings goals and recent purchases at a glance.
+- **Budget Planner** — a limit for each spending pot (housing, groceries, transport, utilities, eating out, kids, health, fun). Bars fill as spending is logged; change any limit and it saves on the spot.
+- **Bills Calendar** — every recurring bill on its due day in a November 2026 calendar, with paid/due marks, a still-to-pay list, and a form to add a bill.
+- **Spending** — the full purchase list with category filters, add-a-purchase and delete. Every add updates the dashboard and planner totals immediately.
+- **Savings Goals** — four goals with progress bars and add-money forms, plus a create-a-goal form.
+- **Money Guides** — six short, specific habits for a household on $5,850 a month.
 
-The site ships with a realistic **example household** — the Alvarez family,
-November 2026, $6,850/month income — clearly labelled as an example, so every
-page shows real numbers on first load. Edit anything and it is saved in the
-browser's local storage; the footer has a "Reset example data" button.
-
-## Files
-
-- `app/` — the site: `index.html`, `style.css`, `app.js` (router + wiring),
-  `views.js` (the six pages), `data.js` (example data + state), `charts.js`
-  (inline-SVG charts). No libraries, no external files.
-- `main.ts` — the make.fun entry program (Node 22): copies `app/` and
-  `screenshots/` to `/output` and writes `dossier.json` with
-  `vendor/makefun-frontend.ts` (copied from the kit, unchanged).
-- `serve.ts` — tiny local static server: `node serve.ts`, then open
-  http://localhost:8080.
-- `screenshots/` — 4 real renders of the site (3 desktop, 1 phone).
-  Re-rendered post-opening with `node shots.mjs` (own script: serves `app/`
-  via `serve.ts`, captures each route in `shots.json` with Playwright
-  Chromium); two runs produce byte-identical files.
-- `shots.json` — which view and viewport each screenshot was taken at.
+All figures are stored only on the device (localStorage) and can be reset with the “Reset demo data” button.
 
 ## Run it
 
 ```sh
-node serve.ts        # then open http://localhost:8080
-# or: open app/index.html directly in a browser
+node serve.ts
+# open http://localhost:8080
 ```
+
+## Hand it in
+
+```sh
+mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+```
+
+`main.ts` copies `app/` and `screenshots/` to the output directory and writes `dossier.json` with the kit's vendored `buildDossier`.
+
+## Screenshots
+
+Re-rendered fresh from this build with `shots-fresh.mjs` (headless Chrome):
+
+1. `1-dashboard.png` — dashboard, desktop
+2. `2-planner.png` — budget planner, desktop
+3. `3-bills.png` — bills calendar, desktop
+4. `4-phone.png` — dashboard, phone 390×844
 
 ## License
 
-MIT — see `LICENSE`.
+MIT — see [LICENSE](LICENSE).

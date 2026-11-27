@@ -1,452 +1,254 @@
-// Household Ledger — page views. Each view is a function of the state that
-// returns HTML; app.js renders it and wires up the controls.
+// Nest Egg — views.
+// One clear job: turn state into HTML for each hash route. Views never mutate
+// state directly; they call the handlers main.js wires up after render.
 
 import {
-  totalIncome, totalPlanned, totalSpent, spentByCategory, categoryColor,
-  monthLabel, shortMonthLabel, money, money0, CATEGORY_COLORS,
+  HOUSEHOLD, MONTH_HISTORY, billsDueTotal, categoryColor, categoryLabel,
+  money, money0, pct, recentTransactions, spentByCategory, totalBudget,
+  totalIncome, totalSpent, upcomingBills,
 } from './data.js';
-import { donutChart, barChart, progressRows, legend } from './charts.js';
+import { barChart, donutChart, legend, progressBar } from './charts.js';
 
-function statCard(label, value, sub, tone = '') {
-  return `<div class="stat ${tone}"><div class="stat-label">${label}</div><div class="stat-value">${value}</div><div class="stat-sub">${sub}</div></div>`;
+function esc(text) {
+  return String(text)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function expenseRow(expense, editable = true) {
-  return `<tr data-id="${expense.id}">
-    <td>${expense.date}</td>
-    <td>${escapeHtml(expense.description)}</td>
-    <td><span class="chip" style="--chip:${categoryColor(expense.category)}">${expense.category}</span></td>
-    <td class="num">${money(expense.amount)}</td>
-    ${editable ? `<td class="actions"><button class="btn small" data-action="edit-expense" data-id="${expense.id}">Edit</button>
-    <button class="btn small danger" data-action="delete-expense" data-id="${expense.id}">Delete</button></td>` : ''}
-  </tr>`;
+function statCard(label, value, sub, tone) {
+  return '<div class="stat ' + (tone || '') + '"><span class="stat-label">' + label +
+    '</span><strong class="stat-value">' + value + '</strong><span class="stat-sub">' + sub + '</span></div>';
 }
 
-export function escapeHtml(text) {
-  return String(text ?? '').replace(/[&<>"']/g, (ch) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  }[ch]));
+function txRow(state, tx) {
+  const neg = tx.amount < 0;
+  return '<li class="tx"><span class="tx-ic" style="background:' +
+    categoryColor(state, tx.category) + '22;color:' + categoryColor(state, tx.category) + '">' +
+    (neg ? '↓' : '↑') + '</span><span class="tx-main"><b>' + esc(tx.label) + '</b><small>' +
+    esc(tx.date) + ' · ' + esc(categoryLabel(state, tx.category)) + '</small></span><span class="tx-amt ' +
+    (neg ? 'in' : 'out') + '">' + (neg ? '+' : '−') + money(Math.abs(tx.amount)) + '</span></li>';
 }
 
-// ---- Dashboard -------------------------------------------------------------
-
-export function renderDashboard(state) {
+export function dashboardView(state) {
   const income = totalIncome(state);
   const spent = totalSpent(state);
-  const planned = totalPlanned(state);
-  const left = income - spent;
-  const savingsPlanned = state.budget.find((b) => b.category === 'Savings')?.planned || 0;
-  const savingsRate = income > 0 ? Math.round((savingsPlanned / income) * 100) : 0;
-  const byCat = spentByCategory(state);
-  const slices = Object.entries(byCat)
-    .map(([label, value]) => ({ label, value, color: categoryColor(label) }))
+  const saved = income - spent;
+  const budget = totalBudget(state);
+  const spentMap = spentByCategory(state);
+  const donutRows = state.budgets
+    .map((row) => ({ label: row.label, value: Math.round(spentMap[row.id] || 0), color: row.color }))
+    .filter((row) => row.value > 0)
     .sort((a, b) => b.value - a.value);
-  const upcoming = [...state.bills]
-    .filter((bill) => !bill.paid)
-    .sort((a, b) => a.dueDay - b.dueDay)
-    .slice(0, 3);
-  const recent = [...state.expenses].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6);
+  const donutData = donutRows.map((row) => ({ ...row, valueText: money0(row.value) }));
+  const bills = upcomingBills(state, 27);
+  const recent = recentTransactions(state, 6);
+  const goalsTotal = state.goals.reduce((s, g) => s + g.saved, 0);
+  const goalsTarget = state.goals.reduce((s, g) => s + g.target, 0);
+  const dueTotal = billsDueTotal(state);
+  const dueText = dueTotal === 0 ? 'no bills' : money(dueTotal) + ' of bills';
 
-  return `
-  <section class="hero">
-    <div>
-      <p class="eyebrow">Example household · ${monthLabel(state.month)}</p>
-      <h1>Good evening, ${escapeHtml(state.householdName)}.</h1>
-      <p class="lede">You have <strong>${money(left)}</strong> left to spend in November, and your savings are on track at <strong>${savingsRate}%</strong> of income.</p>
-    </div>
-    <div class="hero-card">
-      <div class="hero-card-label">Left to spend</div>
-      <div class="hero-card-value">${money(left)}</div>
-      <div class="hero-card-sub">of ${money(income)} income · ${money(spent)} spent so far</div>
-      <a class="btn primary" href="#/expenses">Log an expense</a>
-    </div>
-  </section>
+  return '' +
+    '<section class="hero"><div><p class="eyebrow">November 2026 · ' + esc(HOUSEHOLD.members.join(', ')) + '</p>' +
+    '<h1>Good evening, ' + esc(HOUSEHOLD.name) + '</h1>' +
+    '<p class="lede">You have <b>' + money(income - spent) + '</b> left to spend this month, and ' +
+    '<b>' + dueText + '</b> still to pay. ' +
+    'You are ' + pct(spent, budget) + '% through the plan — right on track.</p>' +
+    '<p class="hero-actions"><a class="btn primary" href="#/planner">Adjust the plan</a> ' +
+    '<a class="btn" href="#/bills">Pay a bill</a></p></div>' +
+    '<div class="hero-card"><span class="stat-label">Money left this month</span>' +
+    '<strong class="big-money">' + money(income - spent) + '</strong>' +
+    '<span class="stat-sub">of ' + money(income) + ' coming in · ' + money(spent) + ' spent</span>' +
+    progressBar(pct(spent, budget), '#2f6f5e') +
+    '<span class="stat-sub">' + pct(spent, budget) + '% of the ' + money0(budget) + ' plan used</span></div></section>' +
 
-  <section class="stats">
-    ${statCard('Monthly income', money0(income), state.income.length + ' sources', 'good')}
-    ${statCard('Spent so far', money0(spent), `${state.expenses.length} expenses logged`)}
-    ${statCard('Planned budget', money0(planned), 'across ' + state.budget.length + ' categories')}
-    ${statCard('Savings rate', savingsRate + '%', money0(savingsPlanned) + ' set aside monthly', 'good')}
-  </section>
+    '<section class="stats">' +
+    statCard('Income', money(income), '3 paydays this month', 'good') +
+    statCard('Spent so far', money(spent), money0(budget) + ' planned', '') +
+    statCard('Saved this month', money(saved), pct(saved, income) + '% of income kept', 'good') +
+    statCard('Bills still due', money(billsDueTotal(state)), state.bills.filter((b) => !b.paid).length + ' bills unpaid', 'warn') +
+    '</section>' +
 
-  <section class="grid two">
-    <div class="card">
-      <h2>Where November's money went</h2>
-      <p class="muted">Spending by category, ${monthLabel(state.month)} to date.</p>
-      <div class="donut-wrap">${donutChart(slices, 'spent', money0(spent))}${legend(slices, money0)}</div>
-      <a class="link-more" href="#/reports">See the full breakdown →</a>
-    </div>
-    <div class="card">
-      <h2>Upcoming bills</h2>
-      <p class="muted">The next bills due in November.</p>
-      ${upcoming.length ? `<ul class="bill-list">${upcoming.map((bill) => `
-        <li>
-          <div><strong>${escapeHtml(bill.name)}</strong><span class="muted"> · due Nov ${bill.dueDay}</span></div>
-          <div class="bill-right"><span>${money(bill.amount)}</span>
-          <button class="btn small" data-action="toggle-bill" data-id="${bill.id}">Mark paid</button></div>
-        </li>`).join('')}</ul>` : '<p class="muted">All bills paid — nicely done.</p>'}
-      <a class="link-more" href="#/bills">All bills &amp; calendar →</a>
-      <h2 class="subhead">Savings goals</h2>
-      ${state.goals.map((goal) => {
-        const pct = Math.min(100, Math.round((goal.saved / goal.target) * 100));
-        return `<div class="goal-mini"><span>${escapeHtml(goal.name)}</span><span>${money0(goal.saved)} of ${money0(goal.target)} · ${pct}%</span></div>
-        <div class="prog-track slim"><div class="prog-fill" style="width:${pct}%;background:#059669"></div></div>`;
-      }).join('')}
-      <a class="link-more" href="#/savings">Manage savings goals →</a>
-    </div>
-  </section>
+    '<section class="grid-2">' +
+    '<div class="card"><h2>Where the money went</h2><div class="donut-wrap">' +
+    donutChart(donutRows, 168) + legend(donutData) + '</div>' +
+    '<p class="hint">' + donutRows[0].label + ' is the biggest slice at ' + money0(donutRows[0].value) +
+    ' — rent plus a $14.60 tap repair this month.</p></div>' +
+    '<div class="card"><h2>Spending, last 6 months</h2>' +
+    barChart(MONTH_HISTORY.map((m) => ({ label: m.month, value: m.spent })), 520, 220) +
+    '<p class="hint">November is the cheapest month so far: $1,025 less than September, the dearest.</p></div>' +
+    '</section>' +
 
-  <section class="card">
-    <h2>Recent expenses</h2>
-    <table class="table">
-      <thead><tr><th>Date</th><th>Description</th><th>Category</th><th class="num">Amount</th></tr></thead>
-      <tbody>${recent.map((e) => expenseRow(e, false)).join('')}</tbody>
-    </table>
-    <a class="link-more" href="#/expenses">See all ${state.expenses.length} expenses →</a>
-  </section>`;
+    '<section class="grid-2">' +
+    '<div class="card"><h2>Coming up <a class="more" href="#/bills">All bills →</a></h2>' +
+    (bills.length ? '<ul class="bills-mini">' + bills.map((b) =>
+      '<li><span><b>' + esc(b.label) + '</b><small>Due Nov ' + b.due + ' · ' + esc(b.recurring) + '</small></span>' +
+      '<b>' + money(b.amount) + '</b></li>').join('') + '</ul>'
+      : '<p class="hint">Nothing left due this month. Nicely done.</p>') +
+    '<h2 class="sub">Savings goals</h2><p class="hint">' + money0(goalsTotal) + ' saved toward ' + money0(goalsTarget) +
+    ' across ' + state.goals.length + ' goals.</p>' +
+    state.goals.slice(0, 2).map((g) =>
+      '<div class="goal-mini"><span><b>' + esc(g.label) + '</b><small>' + money0(g.saved) + ' of ' + money0(g.target) + '</small></span>' +
+      progressBar(pct(g.saved, g.target), '#d98e2b') + '</div>').join('') +
+    '<p><a class="more" href="#/goals">All goals →</a></p></div>' +
+    '<div class="card"><h2>Recent spending <a class="more" href="#/spending">All spending →</a></h2>' +
+    '<ul class="tx-list">' + recent.map((tx) => txRow(state, tx)).join('') + '</ul></div>' +
+    '</section>';
 }
 
-// ---- Budget planner --------------------------------------------------------
-
-export function renderBudget(state) {
-  const income = totalIncome(state);
-  const planned = totalPlanned(state);
-  const byCat = spentByCategory(state);
-  const remaining = income - planned;
-  const needsCats = ['Housing', 'Groceries', 'Transport', 'Utilities', 'Health & Fitness', 'Kids & School'];
-  const wantsCats = ['Dining Out', 'Entertainment', 'Subscriptions', 'Household & Misc'];
-  const sumCats = (cats) => state.budget.filter((b) => cats.includes(b.category)).reduce((s, b) => s + Number(b.planned), 0);
-  const needs = sumCats(needsCats);
-  const wants = sumCats(wantsCats);
-  const savings = sumCats(['Savings']);
-  const pct = (v) => income > 0 ? Math.round((v / income) * 100) : 0;
-
-  return `
-  <section class="page-head">
-    <h1>Monthly budget planner</h1>
-    <p class="lede">Plan November's money before you spend it. Edit any figure — totals update instantly and are saved in this browser.</p>
-  </section>
-
-  <section class="grid two">
-    <div class="card">
-      <h2>Income</h2>
-      <p class="muted">Money coming in each month.</p>
-      <table class="table plain">
-        <tbody>${state.income.map((item) => `<tr>
-          <td><input class="input inline" data-field="income-source" data-id="${item.id}" value="${escapeHtml(item.source)}" aria-label="Income source"></td>
-          <td class="num"><span class="currency">$</span><input class="input inline num" type="number" min="0" step="0.01" data-field="income-amount" data-id="${item.id}" value="${item.amount}" aria-label="Income amount"></td>
-          <td class="actions"><button class="btn small danger" data-action="delete-income" data-id="${item.id}">Remove</button></td>
-        </tr>`).join('')}</tbody>
-      </table>
-      <form class="inline-form" data-form="add-income">
-        <input class="input" name="source" placeholder="New income source" required>
-        <input class="input num" type="number" name="amount" min="0" step="0.01" placeholder="Amount" required>
-        <button class="btn" type="submit">Add income</button>
-      </form>
-      <div class="total-row"><span>Total monthly income</span><strong>${money(income)}</strong></div>
-    </div>
-
-    <div class="card">
-      <h2>The 50 / 30 / 20 check</h2>
-      <p class="muted">A classic rule of thumb: 50% needs, 30% wants, 20% savings. Here's how this plan compares.</p>
-      ${progressRows([
-        { label: 'Needs', value: needs, max: income, color: '#2563eb', right: `${money0(needs)} · ${pct(needs)}% (aim 50%)` },
-        { label: 'Wants', value: wants, max: income, color: '#db2777', right: `${money0(wants)} · ${pct(wants)}% (aim 30%)` },
-        { label: 'Savings', value: savings, max: income, color: '#059669', right: `${money0(savings)} · ${pct(savings)}% (aim 20%)` },
-      ])}
-      <p class="tip">Needs are running a little high at ${pct(needs)}% — mostly the ${money0(state.budget.find((b) => b.category === 'Housing')?.planned || 0)} rent. Every $100 moved from wants to savings shortens the emergency-fund goal by about a month.</p>
-    </div>
-  </section>
-
-  <section class="card">
-    <h2>Spending plan by category</h2>
-    <p class="muted">“Planned” is what you set aside; “Spent” is what the expense log shows so far. The bar turns red when a category goes over plan.</p>
-    <table class="table budget-table">
-      <thead><tr><th>Category</th><th class="num">Planned</th><th class="num">Spent</th><th class="num">Remaining</th><th>Progress</th><th></th></tr></thead>
-      <tbody>
-        ${state.budget.map((item) => {
-          const spent = byCat[item.category] || 0;
-          const leftCat = item.planned - spent;
-          const usePct = item.planned > 0 ? Math.min(100, (spent / item.planned) * 100) : 0;
-          return `<tr>
-            <td><span class="dot" style="background:${categoryColor(item.category)}"></span> ${item.category}</td>
-            <td class="num"><span class="currency">$</span><input class="input inline num" type="number" min="0" step="0.01" data-field="budget-planned" data-id="${item.id}" value="${item.planned}" aria-label="Planned amount for ${item.category}"></td>
-            <td class="num">${money(spent)}</td>
-            <td class="num ${leftCat < 0 ? 'over' : ''}">${money(leftCat)}</td>
-            <td><div class="prog-track"><div class="prog-fill${spent > item.planned ? ' over' : ''}" style="width:${usePct.toFixed(1)}%;background:${categoryColor(item.category)}"></div></div></td>
-            <td class="actions">${item.category !== 'Savings' ? `<button class="btn small danger" data-action="delete-category" data-id="${item.id}">Remove</button>` : ''}</td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-      <tfoot><tr><td><strong>Total</strong></td><td class="num"><strong>${money(planned)}</strong></td><td class="num"><strong>${money(totalSpent(state))}</strong></td><td class="num"><strong>${money(income - totalSpent(state))}</strong></td><td></td><td></td></tr></tfoot>
-    </table>
-    <form class="inline-form" data-form="add-category">
-      <input class="input" name="category" placeholder="New category name" required>
-      <input class="input num" type="number" name="planned" min="0" step="0.01" placeholder="Planned amount" required>
-      <button class="btn" type="submit">Add category</button>
-    </form>
-    <div class="total-row ${remaining < 0 ? 'over' : ''}"><span>Unallocated income (income − planned)</span><strong>${money(remaining)}</strong></div>
-    ${remaining < 0 ? '<p class="warning">Your plan spends more than you earn. Lower a category or raise income before the month runs away with you.</p>' : '<p class="tip">Every dollar has a job — including the unallocated ones. Send them to a savings goal and the month is fully planned.</p>'}
-  </section>`;
-}
-
-// ---- Expense log -----------------------------------------------------------
-
-export function renderExpenses(state, filter = {}) {
-  const categories = [...new Set([...state.budget.map((b) => b.category), ...state.expenses.map((e) => e.category)])].sort();
-  let list = [...state.expenses].sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
-  if (filter.category) list = list.filter((e) => e.category === filter.category);
-  if (filter.search) {
-    const q = filter.search.toLowerCase();
-    list = list.filter((e) => e.description.toLowerCase().includes(q));
-  }
-  const shownTotal = list.reduce((s, e) => s + Number(e.amount || 0), 0);
-  const editingId = filter.editingId || null;
-
-  return `
-  <section class="page-head">
-    <h1>Expense log</h1>
-    <p class="lede">Every dollar out, in one list. Add, edit or delete — the budget planner and the charts update with it.</p>
-  </section>
-
-  <section class="card">
-    <h2>Add an expense</h2>
-    <form class="form-grid" data-form="add-expense">
-      <label>Date <input class="input" type="date" name="date" value="2026-11-26" required></label>
-      <label>Description <input class="input" name="description" placeholder="e.g. Weekly shop — FreshMart" required></label>
-      <label>Category
-        <select class="input" name="category">${categories.map((c) => `<option>${c}</option>`).join('')}</select>
-      </label>
-      <label>Amount ($) <input class="input num" type="number" name="amount" min="0.01" step="0.01" placeholder="0.00" required></label>
-      <button class="btn primary" type="submit">Add expense</button>
-    </form>
-  </section>
-
-  <section class="card">
-    <div class="card-head">
-      <h2>${list.length} expense${list.length === 1 ? '' : 's'} · ${money(shownTotal)}</h2>
-      <div class="filters">
-        <select class="input" id="filter-category" aria-label="Filter by category">
-          <option value="">All categories</option>
-          ${categories.map((c) => `<option ${filter.category === c ? 'selected' : ''}>${c}</option>`).join('')}
-        </select>
-        <input class="input" id="filter-search" type="search" placeholder="Search descriptions…" value="${escapeHtml(filter.search || '')}" aria-label="Search expenses">
-      </div>
-    </div>
-    ${list.length ? `<table class="table">
-      <thead><tr><th>Date</th><th>Description</th><th>Category</th><th class="num">Amount</th><th></th></tr></thead>
-      <tbody>
-        ${list.map((expense) => {
-          if (editingId === expense.id) {
-            return `<tr class="editing" data-id="${expense.id}">
-              <td><input class="input inline" type="date" data-edit="date" value="${expense.date}"></td>
-              <td><input class="input inline" data-edit="description" value="${escapeHtml(expense.description)}"></td>
-              <td><select class="input inline" data-edit="category">${categories.map((c) => `<option ${c === expense.category ? 'selected' : ''}>${c}</option>`).join('')}</select></td>
-              <td class="num"><input class="input inline num" type="number" min="0" step="0.01" data-edit="amount" value="${expense.amount}"></td>
-              <td class="actions"><button class="btn small primary" data-action="save-expense" data-id="${expense.id}">Save</button>
-              <button class="btn small" data-action="cancel-edit">Cancel</button></td>
-            </tr>`;
-          }
-          return expenseRow(expense, true);
-        }).join('')}
-      </tbody>
-    </table>` : '<p class="muted">No expenses match this filter. Clear the search or add one above.</p>'}
-  </section>`;
-}
-
-// ---- Bills & calendar ------------------------------------------------------
-
-export function renderBills(state) {
-  const [year, month] = state.month.split('-').map(Number);
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const firstWeekday = new Date(year, month - 1, 1).getDay(); // 0 = Sunday
-  const today = 26;
-  const billsByDay = {};
-  for (const bill of state.bills) (billsByDay[bill.dueDay] ||= []).push(bill);
-  const paidTotal = state.bills.filter((b) => b.paid).reduce((s, b) => s + Number(b.amount), 0);
-  const dueTotal = state.bills.filter((b) => !b.paid).reduce((s, b) => s + Number(b.amount), 0);
-
-  let cells = '';
-  for (let i = 0; i < firstWeekday; i++) cells += '<div class="cal-cell empty"></div>';
-  for (let day = 1; day <= daysInMonth; day++) {
-    const dayBills = billsByDay[day] || [];
-    const isToday = day === today;
-    cells += `<div class="cal-cell${isToday ? ' today' : ''}">
-      <span class="cal-day">${day}</span>
-      ${dayBills.map((bill) => `<span class="cal-bill${bill.paid ? ' paid' : ''}" title="${escapeHtml(bill.name)} — ${money(bill.amount)}${bill.paid ? ' (paid)' : ''}">${escapeHtml(bill.name)} · ${money0(bill.amount)}</span>`).join('')}
-    </div>`;
-  }
-
-  const sorted = [...state.bills].sort((a, b) => a.dueDay - b.dueDay);
-  return `
-  <section class="page-head">
-    <h1>Bills &amp; reminders</h1>
-    <p class="lede">Never miss a due date. The calendar shows every bill for ${monthLabel(state.month)} — mark one paid and it counts everywhere else on the site.</p>
-  </section>
-
-  <section class="stats">
-    ${`<div class="stat"><div class="stat-label">Bills this month</div><div class="stat-value">${money0(paidTotal + dueTotal)}</div><div class="stat-sub">${state.bills.length} bills scheduled</div></div>`}
-    ${`<div class="stat good"><div class="stat-label">Already paid</div><div class="stat-value">${money0(paidTotal)}</div><div class="stat-sub">${state.bills.filter((b) => b.paid).length} of ${state.bills.length} bills</div></div>`}
-    ${`<div class="stat"><div class="stat-label">Still to pay</div><div class="stat-value">${money0(dueTotal)}</div><div class="stat-sub">${state.bills.filter((b) => !b.paid).length} bills left in November</div></div>`}
-  </section>
-
-  <section class="card">
-    <h2>${monthLabel(state.month)} calendar</h2>
-    <div class="calendar" role="grid" aria-label="Bill calendar for ${monthLabel(state.month)}">
-      ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => `<div class="cal-head">${d}</div>`).join('')}
-      ${cells}
-    </div>
-    <p class="muted">Struck-through bills are paid. Today is highlighted — Nov 26.</p>
-  </section>
-
-  <section class="card">
-    <h2>All bills</h2>
-    <table class="table">
-      <thead><tr><th>Bill</th><th>Category</th><th class="num">Amount</th><th>Due</th><th>Status</th><th></th></tr></thead>
-      <tbody>
-        ${sorted.map((bill) => {
-          const status = bill.paid ? 'Paid' : (bill.dueDay < today ? 'Overdue' : bill.dueDay === today ? 'Due today' : `Due in ${bill.dueDay - today} day${bill.dueDay - today === 1 ? '' : 's'}`);
-          return `<tr>
-            <td><strong>${escapeHtml(bill.name)}</strong>${bill.autopay ? ' <span class="tag">autopay</span>' : ''}</td>
-            <td><span class="chip" style="--chip:${categoryColor(bill.category)}">${bill.category}</span></td>
-            <td class="num">${money(bill.amount)}</td>
-            <td>Nov ${bill.dueDay}</td>
-            <td><span class="status ${bill.paid ? 'paid' : bill.dueDay < today ? 'overdue' : 'due'}">${status}</span></td>
-            <td class="actions">
-              <button class="btn small" data-action="toggle-bill" data-id="${bill.id}">${bill.paid ? 'Mark unpaid' : 'Mark paid'}</button>
-              <button class="btn small danger" data-action="delete-bill" data-id="${bill.id}">Delete</button>
-            </td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table>
-    <form class="form-grid" data-form="add-bill">
-      <label>Bill name <input class="input" name="name" placeholder="e.g. Car insurance" required></label>
-      <label>Amount ($) <input class="input num" type="number" name="amount" min="0.01" step="0.01" placeholder="0.00" required></label>
-      <label>Due day <input class="input num" type="number" name="dueDay" min="1" max="31" value="1" required></label>
-      <label>Category
-        <select class="input" name="category">${Object.keys(CATEGORY_COLORS).map((c) => `<option>${c}</option>`).join('')}</select>
-      </label>
-      <button class="btn primary" type="submit">Add bill</button>
-    </form>
-  </section>`;
-}
-
-// ---- Savings goals --------------------------------------------------------
-
-export function renderSavings(state) {
-  const savingsPlanned = state.budget.find((b) => b.category === 'Savings')?.planned || 0;
-  const incomplete = state.goals.filter((g) => g.saved < g.target);
-  const monthlyShare = incomplete.length ? savingsPlanned / incomplete.length : 0;
-  const totalSaved = state.goals.reduce((s, g) => s + Number(g.saved), 0);
-  const totalTarget = state.goals.reduce((s, g) => s + Number(g.target), 0);
-  const overallPct = totalTarget > 0 ? Math.round((totalSaved / totalTarget) * 100) : 0;
-
-  return `
-  <section class="page-head">
-    <h1>Savings goals</h1>
-    <p class="lede">Four goals, ${money0(totalSaved)} saved of ${money0(totalTarget)} (${overallPct}%). The plan sets aside ${money0(savingsPlanned)} a month — split across the goals still open, that's ${money0(monthlyShare)} each.</p>
-  </section>
-
-  <section class="grid two goals-grid">
-    ${state.goals.map((goal) => {
-      const pct = Math.min(100, Math.round((goal.saved / goal.target) * 100));
-      const remaining = Math.max(0, goal.target - goal.saved);
-      const monthsLeft = goal.saved >= goal.target ? 0 : Math.ceil(remaining / Math.max(1, monthlyShare));
-      return `<div class="card goal-card">
-        <div class="goal-head"><h2>${escapeHtml(goal.name)}</h2><span class="goal-pct">${pct}%</span></div>
-        <p class="muted">${escapeHtml(goal.note || '')}</p>
-        <div class="prog-track tall"><div class="prog-fill" style="width:${pct}%;background:#059669"></div></div>
-        <div class="goal-numbers"><span><strong>${money0(goal.saved)}</strong> saved</span><span>Target <strong>${money0(goal.target)}</strong></span></div>
-        <p class="muted">${goal.saved >= goal.target
-          ? 'Goal reached — time to celebrate, then set the next one.'
-          : `${money0(remaining)} to go · about ${monthsLeft} month${monthsLeft === 1 ? '' : 's'} at ${money0(monthlyShare)}/month · target date ${goal.targetDate}`}</p>
-        <form class="inline-form" data-form="add-funds" data-id="${goal.id}">
-          <input class="input num" type="number" name="amount" min="0.01" step="0.01" placeholder="Add $…" required aria-label="Amount to add to ${escapeHtml(goal.name)}">
-          <button class="btn" type="submit">Add funds</button>
-        </form>
-        <button class="btn small danger" data-action="delete-goal" data-id="${goal.id}">Delete goal</button>
-      </div>`;
-    }).join('')}
-  </section>
-
-  <section class="card">
-    <h2>Start a new goal</h2>
-    <form class="form-grid" data-form="add-goal">
-      <label>Goal name <input class="input" name="name" placeholder="e.g. New laptop" required></label>
-      <label>Target amount ($) <input class="input num" type="number" name="target" min="1" step="0.01" placeholder="0.00" required></label>
-      <label>Already saved ($) <input class="input num" type="number" name="saved" min="0" step="0.01" value="0"></label>
-      <label>Target date <input class="input" type="date" name="targetDate" value="2027-12-31"></label>
-      <label>Note <input class="input" name="note" placeholder="What is it for?"></label>
-      <button class="btn primary" type="submit">Create goal</button>
-    </form>
-  </section>`;
-}
-
-// ---- Reports ---------------------------------------------------------------
-
-export function renderReports(state) {
-  const income = totalIncome(state);
+export function plannerView(state) {
+  const spentMap = spentByCategory(state);
+  const budget = totalBudget(state);
   const spent = totalSpent(state);
-  const history = state.history.map((row) => row.month === state.month
-    ? { ...row, spent }
-    : row);
-  const byCat = spentByCategory(state);
-  const biggest = [...state.expenses].sort((a, b) => b.amount - a.amount).slice(0, 5);
-  const avgSpent = history.reduce((s, r) => s + r.spent, 0) / history.length;
-  const avgSaved = history.reduce((s, r) => s + (r.income - r.spent), 0) / history.length;
+  const rows = state.budgets.map((row) => {
+    const used = spentMap[row.id] || 0;
+    const left = row.budget - used;
+    const over = used > row.budget;
+    return '<article class="plan-row"><span class="plan-ic" style="background:' + row.color + '22;color:' + row.color + '">' +
+      row.icon + '</span><div class="plan-main"><div class="plan-top"><b>' + esc(row.label) + '</b>' +
+      '<span>' + money(used) + ' of ' + money0(row.budget) + '</span></div>' +
+      progressBar(pct(used, row.budget), over ? '#b5543f' : row.color) +
+      '<small class="' + (over ? 'over' : 'left') + '">' + (over ? 'Over by ' + money(used - row.budget) + ' — move money or trim this week' : money(left) + ' left') + '</small></div>' +
+      '<label class="plan-edit">Monthly limit $<input type="number" min="0" step="10" value="' + row.budget +
+      '" data-budget="' + row.id + '" aria-label="Monthly limit for ' + esc(row.label) + '"></label></article>';
+  }).join('');
 
-  const comparison = state.budget.map((item) => ({
-    label: item.category,
-    planned: Number(item.planned),
-    actual: byCat[item.category] || 0,
-  }));
+  return '' +
+    '<section class="page-head"><div><p class="eyebrow">Budget planner · November 2026</p>' +
+    '<h1>Plan the month, then live inside it</h1>' +
+    '<p class="lede">Set a limit for each pot. Spending is counted from your transactions, so the bars move as you spend. ' +
+    'Limits save automatically when you change a number.</p></div>' +
+    '<div class="hero-card"><span class="stat-label">Planned vs spent</span>' +
+    '<strong class="big-money">' + money(spent) + ' <small>/ ' + money0(budget) + '</small></strong>' +
+    progressBar(pct(spent, budget), '#2f6f5e') +
+    '<span class="stat-sub">' + money(budget - spent) + ' still unspent · ' + pct(spent, budget) + '% used</span></div></section>' +
+    '<section class="card"><h2>Your pots</h2>' + rows + '</section>' +
+    '<section class="grid-2"><div class="card"><h2>How the plan is built</h2>' +
+    '<p>Income this month is <b>' + money(totalIncome(state)) + '</b>. The plan keeps <b>' +
+    money(totalIncome(state) - budget) + '</b> unassigned — that is the safety cushion, and it becomes savings on the 30th.</p>' +
+    '<p>Rule of thumb the family uses: housing under 30% of income, food under 15%, and at least 10% straight to savings before anything else.</p></div>' +
+    '<div class="card"><h2>Income this month</h2><ul class="bills-mini">' +
+    state.income.map((row) => '<li><span><b>' + esc(row.label) + '</b><small>Paid on the ' + row.day + 'th</small></span><b>' + money(row.amount) + '</b></li>').join('') +
+    '</ul><p class="hint">Total ' + money(totalIncome(state)) + ' · next payday: market stall, Nov 22.</p></div></section>';
+}
 
-  return `
-  <section class="page-head">
-    <h1>Reports</h1>
-    <p class="lede">Five months at a glance. November's spending is live — it grows as expenses are logged.</p>
-  </section>
+export function billsView(state) {
+  const year = 2026;
+  const month = 10; // November, 0-based
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = 30;
+  const byDay = {};
+  for (const bill of state.bills) {
+    (byDay[bill.due] = byDay[bill.due] || []).push(bill);
+  }
+  let cells = '';
+  for (let i = 0; i < firstWeekday; i++) cells += '<td class="cal-blank"></td>';
+  for (let day = 1; day <= daysInMonth; day++) {
+    const list = byDay[day] || [];
+    const today = day === 27;
+    cells += '<td class="' + (today ? 'cal-today' : '') + '"><span class="cal-day">' + day + '</span>' +
+      list.map((b) => '<span class="cal-bill ' + (b.paid ? 'paid' : 'due') + '" title="' + esc(b.label) + ' — ' + money(b.amount) + '">' +
+        (b.paid ? '✓ ' : '• ') + esc(b.label.split(' — ')[0]) + ' ' + money0(b.amount) + '</span>').join('') + '</td>';
+    if ((firstWeekday + day) % 7 === 0) cells += '</tr><tr>';
+  }
+  const rows = '<tr>' + cells + '</tr>';
+  const unpaid = state.bills.filter((b) => !b.paid);
+  const paid = state.bills.filter((b) => b.paid);
 
-  <section class="stats">
-    ${`<div class="stat"><div class="stat-label">Average monthly spend</div><div class="stat-value">${money0(avgSpent)}</div><div class="stat-sub">Jul – Nov 2026</div></div>`}
-    ${`<div class="stat good"><div class="stat-label">Average monthly saved</div><div class="stat-value">${money0(avgSaved)}</div><div class="stat-sub">${income > 0 ? Math.round((avgSaved / income) * 100) : 0}% of income</div></div>`}
-    ${`<div class="stat"><div class="stat-label">Biggest month</div><div class="stat-value">${money0(Math.max(...history.map((r) => r.spent)))}</div><div class="stat-sub">${shortMonthLabel(history.reduce((a, b) => (a.spent > b.spent ? a : b)).month)} 2026</div></div>`}
-  </section>
+  return '' +
+    '<section class="page-head"><div><p class="eyebrow">Bills calendar · November 2026</p>' +
+    '<h1>Every bill, on the day it lands</h1>' +
+    '<p class="lede"><b>' + unpaid.length + ' bills</b> still to pay (' + money(billsDueTotal(state)) + '). ' +
+    paid.length + ' already paid. Tick a bill off the moment it leaves the account.</p></div>' +
+    '<div class="hero-card"><span class="stat-label">Due before Dec 1</span>' +
+    '<strong class="big-money">' + money(billsDueTotal(state)) + '</strong>' +
+    '<span class="stat-sub">Next: ' + (unpaid.length ? esc(unpaid.slice().sort((a, b) => a.due - b.due)[0].label) + ' — Nov ' + unpaid.slice().sort((a, b) => a.due - b.due)[0].due : 'nothing') + '</span></div></section>' +
+    '<section class="card"><h2>November 2026</h2>' +
+    '<table class="calendar"><thead><tr><th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+    '<p class="hint">✓ = paid &nbsp;• = still due &nbsp;·&nbsp; Today is Nov 27 (highlighted).</p></section>' +
+    '<section class="grid-2"><div class="card"><h2>Still to pay</h2><ul class="bills-mini">' +
+    unpaid.map((b) => '<li><span><b>' + esc(b.label) + '</b><small>Due Nov ' + b.due + ' · ' + esc(b.recurring) + '</small></span>' +
+      '<span class="bill-right"><b>' + money(b.amount) + '</b><button class="btn small" data-pay="' + b.id + '">Mark paid</button></span></li>').join('') +
+    '</ul></div>' +
+    '<div class="card"><h2>Already paid</h2><ul class="bills-mini">' +
+    paid.map((b) => '<li><span><b>' + esc(b.label) + '</b><small>Paid · Nov ' + b.due + '</small></span><b>' + money(b.amount) + '</b></li>').join('') +
+    '</ul>' +
+    '<form id="add-bill" class="mini-form"><h3>Add a bill</h3>' +
+    '<label>Bill name <input name="label" required maxlength="60" placeholder="e.g. Piano lessons"></label>' +
+    '<label>Amount $ <input name="amount" type="number" min="1" step="0.01" required placeholder="45"></label>' +
+    '<label>Due day <input name="due" type="number" min="1" max="30" required placeholder="14"></label>' +
+    '<button class="btn primary" type="submit">Add bill</button></form></div></section>';
+}
 
-  <section class="card">
-    <h2>Income vs spending, Jul – Nov 2026</h2>
-    <p class="muted">Blue bars are income, green bars are what was spent. November is still in progress.</p>
-    ${barChart(history.flatMap((row) => [
-      { label: shortMonthLabel(row.month), value: row.income, color: '#2563eb' },
-      { label: '', value: row.spent, color: '#059669' },
-    ]).map((b, i) => ({ ...b, label: i % 2 === 0 ? b.label : '' })), { height: 240 })}
-    <p class="muted">Blue = income · Green = spending. Each month shows income first, then spending.</p>
-  </section>
+export function spendingView(state, filter) {
+  const spentMap = spentByCategory(state);
+  const cats = [{ id: 'all', label: 'All spending' }].concat(state.budgets);
+  const list = [...state.transactions]
+    .filter((tx) => tx.amount > 0)
+    .filter((tx) => filter === 'all' || tx.category === filter)
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
+  const shownTotal = list.reduce((s, tx) => s + tx.amount, 0);
+  const biggest = Object.entries(spentMap).sort((a, b) => b[1] - a[1])[0] || ['groceries', 0];
 
-  <section class="grid two">
-    <div class="card">
-      <h2>Planned vs actual — November</h2>
-      <p class="muted">Green is inside plan; red is over.</p>
-      ${comparison.map((row) => {
-        const over = row.actual > row.planned;
-        return `<div class="compare-row">
-          <div class="compare-head"><span>${row.label}</span><span>${money0(row.actual)} / ${money0(row.planned)}</span></div>
-          <div class="prog-track"><div class="prog-fill${over ? ' over' : ''}" style="width:${row.planned > 0 ? Math.min(100, (row.actual / row.planned) * 100).toFixed(1) : 0}%;background:${over ? '#dc2626' : categoryColor(row.label)}"></div></div>
-        </div>`;
-      }).join('')}
-    </div>
-    <div class="card">
-      <h2>Biggest single expenses</h2>
-      <p class="muted">November's largest outgoings.</p>
-      <ol class="ranked">
-        ${biggest.map((e) => `<li><span>${escapeHtml(e.description)} <span class="muted">· ${e.date} · ${e.category}</span></span><strong>${money(e.amount)}</strong></li>`).join('')}
-      </ol>
-      <h2 class="subhead">Month by month</h2>
-      <table class="table plain">
-        <thead><tr><th>Month</th><th class="num">Income</th><th class="num">Spent</th><th class="num">Saved</th></tr></thead>
-        <tbody>${history.map((row) => `<tr><td>${monthLabel(row.month)}</td><td class="num">${money(row.income)}</td><td class="num">${money(row.spent)}</td><td class="num">${money(row.income - row.spent)}</td></tr>`).join('')}</tbody>
-      </table>
-    </div>
-  </section>`;
+  return '' +
+    '<section class="page-head"><div><p class="eyebrow">Spending · November 2026</p>' +
+    '<h1>Every dollar out, in one list</h1>' +
+    '<p class="lede">Showing <b>' + list.length + ' purchases</b> totalling <b>' + money(shownTotal) + '</b>. ' +
+    'Add a purchase below and the dashboard, planner and totals update at once.</p></div>' +
+    '<div class="hero-card"><span class="stat-label">Biggest pot so far</span>' +
+    '<strong class="big-money">' + money0(biggest[1]) + '</strong>' +
+    '<span class="stat-sub">' + esc(categoryLabel(state, biggest[0])) + ' leads the month — see the planner to rebalance.</span></div></section>' +
+    '<section class="card"><div class="filters">' +
+    cats.map((c) => '<a class="chip' + (filter === c.id ? ' on' : '') + '" href="#/spending/' + c.id + '">' + esc(c.label) + '</a>').join('') +
+    '</div><ul class="tx-list big">' + list.map((tx) =>
+      '<li class="tx"><span class="tx-ic" style="background:' + categoryColor(state, tx.category) + '22;color:' + categoryColor(state, tx.category) + '">↑</span>' +
+      '<span class="tx-main"><b>' + esc(tx.label) + '</b><small>' + esc(tx.date) + ' · ' + esc(categoryLabel(state, tx.category)) + '</small></span>' +
+      '<span class="tx-amt out">−' + money(tx.amount) + '</span>' +
+      '<button class="btn small ghost" data-del-tx="' + tx.id + '" aria-label="Delete ' + esc(tx.label) + '">Delete</button></li>').join('') +
+    '</ul></section>' +
+    '<section class="card"><form id="add-tx" class="form-grid"><h2>Add a purchase</h2>' +
+    '<label>What was it? <input name="label" required maxlength="60" placeholder="e.g. GreenMart weekly shop"></label>' +
+    '<label>Amount $ <input name="amount" type="number" min="0.01" step="0.01" required placeholder="42.50"></label>' +
+    '<label>Category <select name="category">' + state.budgets.map((b) => '<option value="' + b.id + '">' + esc(b.label) + '</option>').join('') + '</select></label>' +
+    '<label>Date <input name="date" type="date" value="2026-11-27" required></label>' +
+    '<button class="btn primary" type="submit">Add purchase</button></form></section>';
+}
+
+export function goalsView(state) {
+  const totalSaved = state.goals.reduce((s, g) => s + g.saved, 0);
+  const totalTarget = state.goals.reduce((s, g) => s + g.target, 0);
+  return '' +
+    '<section class="page-head"><div><p class="eyebrow">Savings goals</p>' +
+    '<h1>What the family is saving for</h1>' +
+    '<p class="lede"><b>' + money0(totalSaved) + '</b> saved toward <b>' + money0(totalTarget) + '</b> — ' +
+    pct(totalSaved, totalTarget) + '% of the way there. Add money to a goal and the bar moves straight away.</p></div>' +
+    '<div class="hero-card"><span class="stat-label">Saved this month</span>' +
+    '<strong class="big-money">' + money(totalIncome(state) - totalSpent(state)) + '</strong>' +
+    '<span class="stat-sub">Unspent income lands here on the 30th unless you move it sooner.</span></div></section>' +
+    '<section class="goals">' + state.goals.map((g) =>
+      '<article class="card goal"><h2>' + esc(g.label) + '</h2><p class="hint">' + esc(g.note) + '</p>' +
+      '<strong class="big-money">' + money0(g.saved) + ' <small>/ ' + money0(g.target) + '</small></strong>' +
+      progressBar(pct(g.saved, g.target), '#d98e2b') +
+      '<span class="stat-sub">' + pct(g.saved, g.target) + '% · ' + money(g.target - g.saved) + ' to go</span>' +
+      '<form class="add-save" data-goal="' + g.id + '"><label>Add $ <input type="number" min="1" step="1" required placeholder="25"></label>' +
+      '<button class="btn primary small" type="submit">Add to goal</button></form></article>').join('') + '</section>' +
+    '<section class="card"><form id="add-goal" class="form-grid"><h2>Start a new goal</h2>' +
+    '<label>Goal name <input name="label" required maxlength="50" placeholder="e.g. Christmas gifts"></label>' +
+    '<label>Target $ <input name="target" type="number" min="1" step="10" required placeholder="500"></label>' +
+    '<label>Note <input name="note" maxlength="80" placeholder="Why this matters"></label>' +
+    '<button class="btn primary" type="submit">Create goal</button></form></section>';
+}
+
+export function tipsView() {
+  return '' +
+    '<section class="page-head"><div><p class="eyebrow">Money guides</p>' +
+    '<h1>Small habits that keep a household ahead</h1>' +
+    '<p class="lede">Written for a family of four on $5,850 a month — no jargon, just what works.</p></div></section>' +
+    '<section class="grid-2">' +
+    '<article class="card"><h2>1 · Pay yourself first</h2><p>Move savings on payday, before spending starts. This household moves $150 to the emergency fund on the 1st and 15th — it is already at $4,210 of $6,000.</p></article>' +
+    '<article class="card"><h2>2 · One weekly shop</h2><p>Groceries are the biggest flexible pot. One planned shop a week, with a list, beats five small trips. November shops so far: $96.40, $112.30, $88.15, $104.55.</p></article>' +
+    '<article class="card"><h2>3 · Bills on the calendar</h2><p>Every recurring bill gets a due day on the bills calendar. Nothing is “due soon” — it is due Nov 15, or Nov 27, and the tick box proves it was paid.</p></article>' +
+    '<article class="card"><h2>4 · A 24-hour rule</h2><p>Any non-essential buy over $50 waits a day. Most of them never happen — and the ones that do are the ones the family actually wanted.</p></article>' +
+    '<article class="card"><h2>5 · Review on the 30th</h2><p>Ten minutes at month end: which pot went over, and why? October went over on dining by $38 — November’s dining pot is $240, and it is holding.</p></article>' +
+    '<article class="card"><h2>6 · Keep a cushion</h2><p>The plan leaves $2,230 unassigned each month. That cushion is what turns a broken washing machine into an annoyance instead of a crisis.</p></article>' +
+    '</section>';
 }

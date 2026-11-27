@@ -1,81 +1,65 @@
-// Household Ledger — small inline-SVG charts (no libraries, no network).
-// Every chart is drawn from the numbers passed in, so the pictures always
-// match the figures on the page.
+// Nest Egg — charts.
+// One clear job: turn numbers into inline SVG (donut + bars). No libraries,
+// no canvas, no network. Pure functions of (label, value, colour) rows.
 
-function polar(cx, cy, radius, angleDeg) {
-  const angle = ((angleDeg - 90) * Math.PI) / 180;
-  return [cx + radius * Math.cos(angle), cy + radius * Math.sin(angle)];
-}
-
-// Donut chart: slices = [{ label, value, color }]. The centre shows the total.
-export function donutChart(slices, totalLabel, totalValue) {
-  const total = slices.reduce((sum, slice) => sum + slice.value, 0);
-  const size = 220;
-  const cx = size / 2;
-  const cy = size / 2;
-  const radius = 96;
-  const inner = 58;
-  let angle = 0;
-  let paths = '';
-  for (const slice of slices) {
-    if (slice.value <= 0) continue;
-    const sweep = (slice.value / total) * 360;
-    const [x1, y1] = polar(cx, cy, radius, angle);
-    const [x2, y2] = polar(cx, cy, radius, angle + sweep);
-    const large = sweep > 180 ? 1 : 0;
-    paths += `<path d="M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${radius} ${radius} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} L ${cx} ${cy} Z" fill="${slice.color}" stroke="#fff" stroke-width="2"><title>${slice.label}: ${slice.value.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</title></path>`;
-    angle += sweep;
-  }
-  // Inner circle cut-out (drawn as a filled circle over the pie).
-  const centre = totalValue != null
-    ? `<text x="${cx}" y="${cy - 4}" text-anchor="middle" class="donut-total">${totalValue}</text>
-       <text x="${cx}" y="${cy + 18}" text-anchor="middle" class="donut-label">${totalLabel}</text>`
-    : '';
-  return `<svg viewBox="0 0 ${size} ${size}" class="chart donut" role="img" aria-label="Spending breakdown chart">
-    ${paths}
-    <circle cx="${cx}" cy="${cy}" r="${inner}" fill="#fff"></circle>
-    ${centre}
-  </svg>`;
-}
-
-// Vertical bar chart: bars = [{ label, value, color? }], with a value axis.
-export function barChart(bars, { height = 220, format = (v) => '$' + Math.round(v).toLocaleString('en-US') } = {}) {
-  const width = 560;
-  const max = Math.max(...bars.map((b) => b.value), 1);
-  const padTop = 26;
-  const padBottom = 30;
-  const padLeft = 8;
-  const chartHeight = height - padTop - padBottom;
-  const slot = (width - padLeft * 2) / bars.length;
-  const barWidth = Math.min(64, slot * 0.62);
-  let svg = `<svg viewBox="0 0 ${width} ${height}" class="chart bars" role="img" aria-label="Bar chart">`;
-  svg += `<line x1="${padLeft}" y1="${height - padBottom}" x2="${width - padLeft}" y2="${height - padBottom}" stroke="#e2e8f0" stroke-width="1"></line>`;
-  bars.forEach((bar, i) => {
-    const barHeight = Math.max(2, (bar.value / max) * chartHeight);
-    const x = padLeft + i * slot + (slot - barWidth) / 2;
-    const y = height - padBottom - barHeight;
-    const color = bar.color || '#2563eb';
-    svg += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth}" height="${barHeight.toFixed(1)}" rx="4" fill="${color}"><title>${bar.label}: ${format(bar.value)}</title></rect>`;
-    svg += `<text x="${(x + barWidth / 2).toFixed(1)}" y="${(y - 6).toFixed(1)}" text-anchor="middle" class="bar-value">${format(bar.value)}</text>`;
-    svg += `<text x="${(x + barWidth / 2).toFixed(1)}" y="${height - 10}" text-anchor="middle" class="bar-label">${bar.label}</text>`;
-  });
-  svg += '</svg>';
-  return svg;
-}
-
-// Horizontal progress rows: rows = [{ label, value, max, color, right }].
-export function progressRows(rows) {
-  return rows.map((row) => {
-    const pct = row.max > 0 ? Math.min(100, (row.value / row.max) * 100) : 0;
-    const over = row.value > row.max;
-    return `<div class="prog-row">
-      <div class="prog-head"><span class="prog-label"><span class="dot" style="background:${row.color}"></span>${row.label}</span><span class="prog-right">${row.right}</span></div>
-      <div class="prog-track"><div class="prog-fill${over ? ' over' : ''}" style="width:${pct.toFixed(1)}%;background:${row.color}"></div></div>
-    </div>`;
+export function donutChart(rows, size) {
+  const total = rows.reduce((sum, row) => sum + row.value, 0) || 1;
+  const radius = 62;
+  const cx = 80;
+  const cy = 80;
+  const circumference = 2 * Math.PI * radius;
+  let offset = 0;
+  const segments = rows.map((row) => {
+    const frac = row.value / total;
+    const len = frac * circumference;
+    const seg = '<circle cx="' + cx + '" cy="' + cy + '" r="' + radius + '" fill="none" stroke="' +
+      row.color + '" stroke-width="26" stroke-dasharray="' + len.toFixed(1) + ' ' +
+      (circumference - len).toFixed(1) + '" stroke-dashoffset="' + (-offset).toFixed(1) +
+      '" transform="rotate(-90 ' + cx + ' ' + cy + ')" />';
+    offset += len;
+    return seg;
   }).join('');
+  const hole = '<circle cx="' + cx + '" cy="' + cy + '" r="46" fill="#fffdf6" />' +
+    '<text x="' + cx + '" y="' + (cy - 2) + '" text-anchor="middle" font-size="19" font-weight="800" fill="#1d2b26">$' +
+    Math.round(total).toLocaleString('en-US') + '</text>' +
+    '<text x="' + cx + '" y="' + (cy + 17) + '" text-anchor="middle" font-size="11" fill="#6b7a72">spent in Nov</text>';
+  return '<svg viewBox="0 0 160 160" width="' + size + '" height="' + size +
+    '" role="img" aria-label="Donut chart of spending by category">' + segments + hole + '</svg>';
 }
 
-// Legend for a donut chart: rows = [{ label, value, color }].
-export function legend(rows, format) {
-  return `<ul class="legend">${rows.map((row) => `<li><span class="dot" style="background:${row.color}"></span><span class="legend-label">${row.label}</span><span class="legend-value">${format(row.value)}</span></li>`).join('')}</ul>`;
+export function barChart(rows, width, height) {
+  const max = Math.max(...rows.map((row) => row.value), 1);
+  const gap = 10;
+  const barW = Math.floor((width - gap * (rows.length - 1)) / rows.length);
+  const base = height - 26;
+  const scale = (height - 52) / max;
+  let out = '<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" role="img" aria-label="Bar chart of monthly spending">';
+  rows.forEach((row, i) => {
+    const h = Math.max(4, Math.round(row.value * scale));
+    const x = i * (barW + gap);
+    const y = base - h;
+    const hot = i === rows.length - 1;
+    out += '<rect x="' + x + '" y="' + y + '" width="' + barW + '" height="' + h + '" rx="5" fill="' +
+      (hot ? '#2f6f5e' : '#b9c9bd') + '" />';
+    out += '<text x="' + (x + barW / 2) + '" y="' + (y - 6) + '" text-anchor="middle" font-size="11" font-weight="700" fill="#1d2b26">$' +
+      Math.round(row.value).toLocaleString('en-US') + '</text>';
+    out += '<text x="' + (x + barW / 2) + '" y="' + (height - 8) + '" text-anchor="middle" font-size="11" fill="#6b7a72">' +
+      row.label + '</text>';
+  });
+  out += '</svg>';
+  return out;
+}
+
+export function progressBar(percent, color) {
+  const safe = Math.max(0, Math.min(100, Math.round(percent)));
+  return '<div class="bar-track" role="progressbar" aria-valuenow="' + safe +
+    '" aria-valuemin="0" aria-valuemax="100"><div class="bar-fill" style="width:' + safe +
+    '%;background:' + color + '"></div></div>';
+}
+
+export function legend(rows) {
+  return '<ul class="legend">' + rows.map((row) =>
+    '<li><span class="dot" style="background:' + row.color + '"></span>' + row.label +
+    ' <b>' + row.valueText + '</b></li>'
+  ).join('') + '</ul>';
 }
